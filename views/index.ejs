@@ -1,0 +1,154 @@
+<!-- views/index.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Automation Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+
+        form {
+            background: #f4f4f4;
+            padding: 20px;
+            border-radius: 5px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="email"],
+        input[type="password"],
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        textarea {
+            height: 150px;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .button-secondary {
+            background: #555;
+        }
+
+        button:hover {
+            opacity: 0.9;
+        }
+
+        .help-text {
+            font-size: 0.8em;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Email Automation Tool</h1>
+
+    <form id="emailForm" action="/preview" method="POST" enctype="multipart/form-data">
+        <div class="form-group">
+            <label for="excelFile">Upload Excel File:</label>
+            <input type="file" id="excelFile" name="excelFile" required>
+            <div class="help-text">The Excel file should contain a column named 'email' (lowercase) for recipients.
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label for="emailSubject">Email Subject Line:</label>
+            <input type="text" id="emailSubject" name="emailSubject" placeholder="Your email subject line here..."
+                required>
+            <div class="help-text">You can use {{column_name}} placeholders in the subject line too.</div>
+        </div>
+
+        <div class="form-group">
+            <label for="messageTemplate">Message Template:</label>
+            <textarea id="messageTemplate" name="messageTemplate" placeholder="Dear {{name}}, 
+This is your personalized message..." required></textarea>
+            <div class="help-text">Use {{column_name}} to insert data from Excel columns. For example, {{name}} will be
+                replaced with the value from the 'name' column.</div>
+        </div>
+
+        <div class="button-group">
+            <button type="submit" formaction="/preview">Preview First Row</button>
+            <button type="submit" formaction="/send-emails" class="button-secondary">Skip Preview and Send All</button>
+        </div>
+
+        <div class="form-group" id="emailFields" style="display: none;">
+            <hr style="margin: 20px 0;">
+            <h3>Email Sending Credentials</h3>
+            <div style="margin-bottom: 15px;">
+                <label for="email">Your Email Address:</label>
+                <input type="email" id="email" name="email" placeholder="your-email@gmail.com">
+            </div>
+
+            <div>
+                <label for="appPassword">App Password:</label>
+                <input type="password" id="appPassword" name="appPassword">
+                <div class="help-text">For Gmail, use an app password. <a
+                        href="https://support.google.com/accounts/answer/185833" target="_blank">Learn how to create
+                        one</a>.</div>
+            </div>
+        </div>
+    </form>
+
+    <script>
+        // Show email fields when "Skip Preview and Send All" is clicked
+        document.querySelector('button[formaction="/send-emails"]').addEventListener('click', function (e) {
+            const emailField = document.getElementById('email');
+            const passwordField = document.getElementById('appPassword');
+
+            // Show fields and make them required
+            document.getElementById('emailFields').style.display = 'block';
+            emailField.required = true;
+            passwordField.required = true;
+
+            // If fields are empty, prevent form submission
+            if (!emailField.value || !passwordField.value) {
+                e.preventDefault();
+                alert('Please enter your email and app password to send emails.');
+                emailField.focus();
+            }
+        });
+    </script>
+</body>
+
+</html>
