@@ -3,11 +3,13 @@ const express = require('express');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const nodemailer = require('nodemailer');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Set up EJS as the view engine
+// Set up EJS as the view engine with proper paths
+app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -28,9 +30,24 @@ const upload = multer({
     }
 });
 
+// Debug route to check views directory
+app.get('/debug', (req, res) => {
+    res.send({
+        viewsPath: app.get('views'),
+        dirname: __dirname,
+        exists: require('fs').existsSync(app.get('views')),
+        files: require('fs').existsSync(app.get('views')) ?
+            require('fs').readdirSync(app.get('views')) : []
+    });
+});
+
 // Home page
 app.get('/', (req, res) => {
-    res.render('index');
+    try {
+        res.render('index');
+    } catch (error) {
+        res.status(500).send(`Error rendering index: ${error.message}`);
+    }
 });
 
 // Handle file upload and preview first row

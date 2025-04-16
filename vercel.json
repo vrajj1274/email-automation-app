@@ -3,7 +3,12 @@
     "builds": [
         {
             "src": "app.js",
-            "use": "@vercel/node"
+            "use": "@vercel/node",
+            "config": {
+                "includeFiles": [
+                    "views/**"
+                ]
+            }
         }
     ],
     "routes": [
@@ -12,7 +17,10 @@
             "dest": "/app.js"
         }
     ],
-    "env": {
-        "NODE_ENV": "production"
+    "functions": {
+        "app.js": {
+            "memory": 1024,
+            "maxDuration": 10
+        }
     }
 }
