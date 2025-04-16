@@ -1,10 +1,9 @@
-// app.js - Main application file
+// app.js - Main application file for serverless environment
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
 const XLSX = require('xlsx');
 const nodemailer = require('nodemailer');
-const fs = require('fs');
+const session = require('express-session');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,21 +13,22 @@ app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// Configure multer for file uploads
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/');
-    },
-    filename: (req, file, cb) => {
-        cb(null, Date.now() + path.extname(file.originalname));
-    }
-});
+// Set up session middleware
+app.use(session({
+    secret: 'email-automation-secret',
+    resave: false,
+    saveUninitialized: true,
+    cookie: { secure: process.env.NODE_ENV === 'production' }
+}));
 
+// Configure multer for in-memory file uploads
 const upload = multer({
-    storage: storage,
+    storage: multer.memoryStorage(),
     fileFilter: (req, file, cb) => {
         const filetypes = /xlsx|xls/;
-        const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+        const extname = filetypes.test(
+            file.originalname.split('.').pop().toLowerCase()
+        );
         if (extname) {
             return cb(null, true);
         } else {
@@ -36,11 +36,6 @@ const upload = multer({
         }
     }
 });
-
-// Ensure uploads directory exists
-if (!fs.existsSync('uploads')) {
-    fs.mkdirSync('uploads');
-}
 
 // Home page
 app.get('/', (req, res) => {
@@ -60,26 +55,22 @@ app.post('/preview', upload.single('excelFile'), (req, res) => {
     }
 
     try {
-        // Read and parse Excel file
-        const workbook = XLSX.readFile(req.file.path);
+        // Read and parse Excel file from buffer
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
         const data = XLSX.utils.sheet_to_json(worksheet);
 
         if (data.length === 0) {
-            fs.unlinkSync(req.file.path); // Clean up file
             return res.status(400).send('Excel file has no data');
         }
 
         // Get first row for preview
         const firstRow = data[0];
 
-        // Store file path in session or temporary storage for later use
-        const tempData = {
-            filePath: req.file.path,
-            firstRow: firstRow,
-            allColumns: Object.keys(firstRow),
-            hasEmailColumn: firstRow.hasOwnProperty('email'),
+        // Store data in session for later use
+        req.session.emailData = {
+            workbookData: data,
             messageTemplate: messageTemplate,
             emailSubject: emailSubject || 'Personalized Message'
         };
@@ -94,32 +85,23 @@ app.post('/preview', upload.single('excelFile'), (req, res) => {
             previewSubject = previewSubject.replace(placeholder, firstRow[key]);
         });
 
-        tempData.previewMessage = previewMessage;
-        tempData.previewSubject = previewSubject;
-
         // Render preview page
-        res.render('preview', tempData);
+        res.render('preview', {
+            firstRow: firstRow,
+            allColumns: Object.keys(firstRow),
+            hasEmailColumn: firstRow.hasOwnProperty('email'),
+            messageTemplate: messageTemplate,
+            emailSubject: emailSubject || 'Personalized Message',
+            previewMessage: previewMessage,
+            previewSubject: previewSubject
+        });
     } catch (error) {
-        if (req.file && fs.existsSync(req.file.path)) {
-            fs.unlinkSync(req.file.path); // Clean up file
-        }
         res.status(500).send(`Error processing file: ${error.message}`);
     }
 });
 
-// Handle file upload and form submission
+// Handle email sending
 app.post('/send-emails', upload.single('excelFile'), async (req, res) => {
-    // Check if this is a continuation from preview (no new file)
-    let filePath = req.body.existingFilePath;
-
-    // If no existing file path or it doesn't exist, use the new upload
-    if (!filePath || !fs.existsSync(filePath)) {
-        if (!req.file) {
-            return res.status(400).send('No file uploaded');
-        }
-        filePath = req.file.path;
-    }
-
     const { email, appPassword, messageTemplate, emailSubject } = req.body;
     const subject = emailSubject || 'Personalized Message';
 
@@ -128,11 +110,22 @@ app.post('/send-emails', upload.single('excelFile'), async (req, res) => {
     }
 
     try {
-        // Read and parse Excel file
-        const workbook = XLSX.readFile(filePath);
-        const sheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[sheetName];
-        const data = XLSX.utils.sheet_to_json(worksheet);
+        let data;
+
+        // If we have a new file upload, process it
+        if (req.file) {
+            const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            data = XLSX.utils.sheet_to_json(worksheet);
+        }
+        // Otherwise use data from session (from preview)
+        else if (req.session && req.session.emailData && req.session.emailData.workbookData) {
+            data = req.session.emailData.workbookData;
+        }
+        else {
+            return res.status(400).send('No data found. Please upload an Excel file.');
+        }
 
         // Setup email transporter
         const transporter = nodemailer.createTransport({
@@ -181,20 +174,24 @@ app.post('/send-emails', upload.single('excelFile'), async (req, res) => {
             }
         }
 
-        // Clean up - remove the uploaded file
-        fs.unlinkSync(filePath);
+        // Clear session data
+        if (req.session) {
+            req.session.emailData = null;
+        }
 
         // Render results page
         res.render('results', { results });
     } catch (error) {
-        // Clean up file in case of error
-        if (fs.existsSync(filePath)) {
-            fs.unlinkSync(filePath);
-        }
         res.status(500).send(`Error processing request: ${error.message}`);
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-});
+// Export the express app
+module.exports = app;
+
+// Only listen if not being imported
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server running at http://localhost:${PORT}`);
+    });
+}

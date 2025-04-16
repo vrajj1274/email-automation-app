@@ -1,175 +1,148 @@
-<!-- views/preview.ejs -->
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Preview Email</title>
+    <title>Email Preview</title>
     <style>
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
-            max-width: 800px;
-            margin: 0 auto;
+            margin: 0;
             padding: 20px;
-        }
-
-        h1,
-        h2 {
-            color: #333;
+            background-color: #f4f4f4;
         }
 
         .container {
-            background: #f4f4f4;
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
             padding: 20px;
             border-radius: 5px;
-            margin-bottom: 20px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
         }
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
+        h1 {
+            color: #333;
+            text-align: center;
         }
 
-        th,
-        td {
-            padding: 10px;
+        .preview-box {
             border: 1px solid #ddd;
-            text-align: left;
-        }
-
-        th {
-            background-color: #f2f2f2;
-        }
-
-        .preview-message {
-            background: #fff;
             padding: 15px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"] {
+            width: 100%;
+            padding: 8px;
             border: 1px solid #ddd;
-            border-radius: 5px;
-            white-space: pre-line;
+            border-radius: 4px;
         }
 
-        .subject-line {
-            font-weight: bold;
-            margin-bottom: 10px;
-            padding: 10px;
-            background: #e9e9e9;
-            border-bottom: 1px solid #ddd;
-            border-radius: 5px 5px 0 0;
-        }
-
-        .warning {
-            color: #ff0000;
-            font-weight: bold;
-        }
-
-        .info {
-            color: #0066cc;
-        }
-
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 20px;
-        }
-
-        .button {
-            display: inline-block;
-            background: #4CAF50;
+        button {
+            background-color: #4CAF50;
             color: white;
-            border: none;
             padding: 10px 15px;
+            border: none;
             border-radius: 4px;
             cursor: pointer;
             font-size: 16px;
-            text-decoration: none;
         }
 
-        .button-secondary {
-            background: #555;
+        button:hover {
+            background-color: #45a049;
         }
 
-        .button:hover {
-            opacity: 0.9;
+        .back-btn {
+            background-color: #666;
+            margin-right: 10px;
+        }
+
+        .back-btn:hover {
+            background-color: #555;
+        }
+
+        .alert {
+            padding: 10px;
+            background-color: #f44336;
+            color: white;
+            margin-bottom: 15px;
+            border-radius: 4px;
         }
     </style>
 </head>
 
 <body>
-    <h1>Email Preview</h1>
-
     <div class="container">
-        <h2>First Row Data Preview</h2>
-        <table>
-            <thead>
-                <tr>
-                    <% allColumns.forEach(column=> { %>
-                        <th>
-                            <%= column %>
-                        </th>
-                        <% }); %>
-                </tr>
-            </thead>
-            <tbody>
-                <tr>
-                    <% allColumns.forEach(column=> { %>
-                        <td>
-                            <%= firstRow[column] %>
-                        </td>
-                        <% }); %>
-                </tr>
-            </tbody>
-        </table>
+        <h1>Email Preview</h1>
 
         <% if (!hasEmailColumn) { %>
-            <p class="warning">WARNING: No 'email' column found in your Excel file. You need a column specifically named
-                'email' (lowercase) for this application to work properly.</p>
+            <div class="alert">
+                Warning: Your Excel file does not have an 'email' column. Make sure your data includes email addresses.
+            </div>
             <% } %>
+
+                <h2>Preview for First Recipient</h2>
+                <div class="preview-box">
+                    <p><strong>Subject:</strong>
+                        <%= previewSubject %>
+                    </p>
+                    <p><strong>Message:</strong></p>
+                    <p style="white-space: pre-line;">
+                        <%= previewMessage %>
+                    </p>
+                </div>
+
+                <h2>Available Fields</h2>
+                <p>These fields from your Excel file can be used as placeholders:</p>
+                <ul>
+                    <% allColumns.forEach(column=> { %>
+                        <li><strong>{{<%= column %>}}</strong>: <%= firstRow[column] %>
+                        </li>
+                        <% }); %>
+                </ul>
+
+                <h2>Send Emails</h2>
+                <p>Enter your email credentials to send personalized emails to all recipients in the Excel file.</p>
+
+                <form action="/send-emails" method="POST">
+                    <input type="hidden" name="messageTemplate" value="<%= messageTemplate %>">
+                    <input type="hidden" name="emailSubject" value="<%= emailSubject %>">
+
+                    <div class="form-group">
+                        <label for="email">Your Gmail Address:</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="appPassword">App Password:</label>
+                        <input type="password" id="appPassword" name="appPassword" required>
+                        <small>Note: Use an app password, not your regular Gmail password. <a
+                                href="https://support.google.com/accounts/answer/185833" target="_blank">Learn how to
+                                create an app password</a>.</small>
+                    </div>
+
+                    <div class="form-group">
+                        <a href="/" class="button back-btn">Back</a>
+                        <button type="submit">Send Emails</button>
+                    </div>
+                </form>
     </div>
-
-    <div class="container">
-        <h2>Message Preview</h2>
-        <p class="info">This is how your email will look for the first recipient:</p>
-        <div class="preview-message">
-            <div class="subject-line">Subject: <%= previewSubject %>
-            </div>
-            <%= previewMessage %>
-        </div>
-    </div>
-
-    <form action="/send-emails" method="POST">
-        <input type="hidden" name="existingFilePath" value="<%= filePath %>">
-        <input type="hidden" name="messageTemplate" value="<%= messageTemplate %>">
-        <input type="hidden" name="emailSubject" value="<%= emailSubject %>">
-
-        <div class="container">
-            <h2>To Continue, Enter Your Email Credentials</h2>
-            <div style="margin-bottom: 15px;">
-                <label for="email" style="display: block; margin-bottom: 5px; font-weight: bold;">Your Email
-                    Address:</label>
-                <input type="email" id="email" name="email" placeholder="your-email@gmail.com" required
-                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-            </div>
-
-            <div style="margin-bottom: 15px;">
-                <label for="appPassword" style="display: block; margin-bottom: 5px; font-weight: bold;">App
-                    Password:</label>
-                <input type="password" id="appPassword" name="appPassword" required
-                    style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                <div style="font-size: 0.8em; color: #666; margin-top: 5px;">For Gmail, use an app password. <a
-                        href="https://support.google.com/accounts/answer/185833" target="_blank">Learn how to create
-                        one</a>.</div>
-            </div>
-        </div>
-
-        <div class="button-group">
-            <button type="submit" class="button">Send All Emails</button>
-            <a href="/" class="button button-secondary">Cancel</a>
-        </div>
-    </form>
 </body>
 
 </html>
