@@ -3,7 +3,6 @@ const express = require('express');
 const multer = require('multer');
 const XLSX = require('xlsx');
 const nodemailer = require('nodemailer');
-const session = require('express-session');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -12,14 +11,6 @@ const PORT = process.env.PORT || 3000;
 app.set('view engine', 'ejs');
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
-// Set up session middleware
-app.use(session({
-    secret: 'email-automation-secret',
-    resave: false,
-    saveUninitialized: true,
-    cookie: { secure: process.env.NODE_ENV === 'production' }
-}));
 
 // Configure multer for in-memory file uploads
 const upload = multer({
@@ -32,7 +23,7 @@ const upload = multer({
         if (extname) {
             return cb(null, true);
         } else {
-            cb('Error: Excel files only!');
+            cb(new Error('Error: Excel files only!'));
         }
     }
 });
@@ -68,13 +59,6 @@ app.post('/preview', upload.single('excelFile'), (req, res) => {
         // Get first row for preview
         const firstRow = data[0];
 
-        // Store data in session for later use
-        req.session.emailData = {
-            workbookData: data,
-            messageTemplate: messageTemplate,
-            emailSubject: emailSubject || 'Personalized Message'
-        };
-
         // Create personalized message for preview
         let previewMessage = messageTemplate;
         let previewSubject = emailSubject || 'Personalized Message';
@@ -85,6 +69,9 @@ app.post('/preview', upload.single('excelFile'), (req, res) => {
             previewSubject = previewSubject.replace(placeholder, firstRow[key]);
         });
 
+        // Instead of using sessions, pass the workbook data as a hidden field
+        const workbookBase64 = Buffer.from(req.file.buffer).toString('base64');
+
         // Render preview page
         res.render('preview', {
             firstRow: firstRow,
@@ -93,7 +80,8 @@ app.post('/preview', upload.single('excelFile'), (req, res) => {
             messageTemplate: messageTemplate,
             emailSubject: emailSubject || 'Personalized Message',
             previewMessage: previewMessage,
-            previewSubject: previewSubject
+            previewSubject: previewSubject,
+            workbookData: workbookBase64
         });
     } catch (error) {
         res.status(500).send(`Error processing file: ${error.message}`);
@@ -102,7 +90,7 @@ app.post('/preview', upload.single('excelFile'), (req, res) => {
 
 // Handle email sending
 app.post('/send-emails', upload.single('excelFile'), async (req, res) => {
-    const { email, appPassword, messageTemplate, emailSubject } = req.body;
+    const { email, appPassword, messageTemplate, emailSubject, workbookData } = req.body;
     const subject = emailSubject || 'Personalized Message';
 
     if (!email || !appPassword || !messageTemplate) {
@@ -112,16 +100,20 @@ app.post('/send-emails', upload.single('excelFile'), async (req, res) => {
     try {
         let data;
 
-        // If we have a new file upload, process it
+        // If we have a new file upload
         if (req.file) {
             const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
             const sheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[sheetName];
             data = XLSX.utils.sheet_to_json(worksheet);
         }
-        // Otherwise use data from session (from preview)
-        else if (req.session && req.session.emailData && req.session.emailData.workbookData) {
-            data = req.session.emailData.workbookData;
+        // If we have workbook data from a hidden field
+        else if (workbookData) {
+            const buffer = Buffer.from(workbookData, 'base64');
+            const workbook = XLSX.read(buffer, { type: 'buffer' });
+            const sheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[sheetName];
+            data = XLSX.utils.sheet_to_json(worksheet);
         }
         else {
             return res.status(400).send('No data found. Please upload an Excel file.');
@@ -174,16 +166,17 @@ app.post('/send-emails', upload.single('excelFile'), async (req, res) => {
             }
         }
 
-        // Clear session data
-        if (req.session) {
-            req.session.emailData = null;
-        }
-
         // Render results page
         res.render('results', { results });
     } catch (error) {
         res.status(500).send(`Error processing request: ${error.message}`);
     }
+});
+
+// Add error handler middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).send(`Something broke! Error: ${err.message}`);
 });
 
 // Export the express app
